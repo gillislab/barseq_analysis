@@ -71,7 +71,8 @@ plot_umap = function(barseq, output_dir, text_size=3, filename="preliminary_anal
     point_size = 70 / sqrt(ncol(barseq))
     pdf(file.path(output_dir, filename))
     # try alpha = 0.05
-    p = plot_raster_umap(barseq, color_by="label", text_by="subclass", text_size=text_size, point_size=point_size) +
+    text_name = ifelse("subclass" %in% names(colData(barseq)), "subclass", "label")
+    p = plot_raster_umap(barseq, color_by="label", text_by=text_name, text_size=text_size, point_size=point_size) +
         ggtitle("Preliminary clustering") +
         guides(col="none") +
         coord_fixed()
@@ -87,6 +88,45 @@ plot_umap = function(barseq, output_dir, text_size=3, filename="preliminary_anal
     p = plot_raster_umap(barseq, color_by = "Gad1", point_size=point_size) +
         ggtitle("Inhibitory marker") +
         coord_fixed()
+    print(p)
+    stats = tibble(cell_type = barseq$label, n_genes=barseq$n_genes, gaba = logcounts(barseq)["Gad1",], glu = logcounts(barseq)["Slc17a7",])
+    p = ggplot(stats, aes(cell_type, n_genes)) +
+        geom_boxplot() +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle=45, hjust=1)) +
+        labs(x=NULL, y="# genes detected")
+    print(p)
+    p = ggplot(stats, aes(cell_type, glu)) +
+        geom_boxplot() +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle=45, hjust=1)) +
+        labs(x=NULL, y="Slc17a7 expression")
+    print(p)
+    p = stats %>%
+        group_by(cell_type) %>%
+        summarize(glu = mean(glu>0)) %>%
+        ggplot(aes(cell_type, glu)) +
+        geom_col() +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle=45, hjust=1)) +
+        labs(x=NULL, y="Fraction cells expressing Slc17a7") +
+        geom_hline(yintercept = 0.95, linetype = "dashed")
+    print(p)
+    p = ggplot(stats, aes(cell_type, gaba)) +
+        geom_boxplot() +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle=45, hjust=1)) +
+        labs(x=NULL, y="Gad1 expression")
+    print(p)
+    p = stats %>%
+        group_by(cell_type) %>%
+        summarize(gaba = mean(gaba>0)) %>%
+        ggplot(aes(cell_type, gaba)) +
+        geom_col() +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle=45, hjust=1)) +
+        labs(x=NULL, y="Fraction cells expressing Gad1") +
+        geom_hline(yintercept = 0.95, linetype = "dashed")
     print(p)
     dev.off()
 }
