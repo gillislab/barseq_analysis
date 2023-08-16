@@ -30,6 +30,11 @@ main = function() {
                 space = one_way_anova(df, "bin_id")
             ), .id = "factor")})) %>%
         unnest(aov)
+    significance_thr = subclass_anova %>%
+        select(factor, N, K) %>%
+        distinct() %>%
+        mutate(F = qf(1-0.05, K-1, N-K),
+               varexp = 1/(1+(N-K)/((K-1)*F)))
     p1 = subclass_anova %>%
         pivot_wider(gene, names_from = "factor", values_from = "var_exp") %>%
         ggplot(aes(x=cell_type,y=space,label=gene)) +
@@ -80,11 +85,19 @@ main = function() {
         labs(x="Var. explained (H3 types)",y="Var. explained (space)")
     p1
     ggsave("figs/spatial_patterns/ct_vs_spatial/cluster.pdf", p1)
+    n_tests = filter(cluster_anova, factor %in% c("space","subclass")) %>% nrow()
+    significance_thr = cluster_anova %>%
+        select(factor, N, K) %>%
+        distinct() %>%
+        mutate(F = qf(1-0.05/n_tests, K-1, N-K),
+               varexp = 1/(1+(N-K)/((K-1)*F)))    
     p1 = cluster_anova %>%
         pivot_wider(gene, names_from = "factor", values_from = "var_exp") %>%
         ggplot(aes(x=subclass,y=space,label=gene)) +
         geom_text() +
-        geom_abline(slope=1, linetype="dashed") +
+#        geom_abline(slope=1, linetype="dashed") +
+        geom_hline(yintercept = significance_thr$varexp[significance_thr$factor=="space"], linetype="dashed") +
+        geom_vline(xintercept = significance_thr$varexp[significance_thr$factor=="subclass"], linetype="dashed") +
         scale_x_continuous(labels = scales::percent) +
         scale_y_continuous(labels = scales::percent) +
         theme_bw(base_size=20) +

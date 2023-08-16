@@ -1,10 +1,10 @@
 
 library(tidyverse)
 library(SingleCellExperiment)
-source("~/archive/projects/common/brain_datasets.R", chdir=TRUE)
-source("~/archive/data//brain/yao21//yao21.R")
+source("~/projects/cshl/common/brain_datasets.R", chdir=TRUE)
+source("~/data//brain/yao21//yao21.R")
 
-BARSEQ_DIR = "~/archive/data/brain/barseq_ctx"
+BARSEQ_DIR = "~/data/brain/barseq_ctx"
 
 
 dataset_names = function() {
@@ -54,6 +54,11 @@ convert_gene_names = function(genes) {
     needs_conversion = genes %in% names(to_convert)
     genes[needs_conversion] = to_convert[genes[needs_conversion]]
     return(genes)
+}
+
+ccf_parentname = function(filename = "data/CCFnames_2017.csv") {
+    result = read_csv(filename, show_col_types = FALSE)
+    return(deframe(result))
 }
 
 convert_to_cpm = function(M, total_counts = 1000000) {

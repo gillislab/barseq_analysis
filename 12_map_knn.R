@@ -1,5 +1,6 @@
 
 library(tidyverse)
+library(patchwork)
 source("dataset.R")
 
 
@@ -144,10 +145,10 @@ plot_predictions = function(barseq, dataset) {
     ggsave("figs/knn_mapping/yao_mapping_summary_nonctx.pdf", p1)
     
     # detailed plots per CTX subclass
-    pdf("figs/knn_mapping/yao_mapping.pdf")
     max_jaccard = max(summary_matrix)
     max_cells = max(max(ref_metadata$f_cells), max(barseq_metadata$f_cells))
-    for (my_subclass in ctx_subclass()) {
+    my_txt_size=11
+    all_plots = lapply(ctx_subclass(), function(my_subclass) {
         to_plot = summary_matrix[cluster_to_subclass[rownames(summary_matrix)] == my_subclass,,drop=FALSE]
         to_plot = to_plot[, colSums(to_plot>threshold)>0, drop=FALSE]
         #row_order = na.omit(rownames(to_plot)[match(cell_type_order(), rownames(to_plot))])
@@ -160,12 +161,12 @@ plot_predictions = function(barseq, dataset) {
             mutate(cluster = fct_rev(cluster)) %>%
 #            mutate(predicted_ct = factor(predicted_ct, colnames(to_plot)[col_order])) %>%
             mutate(predicted_ct = as.factor(predicted_ct)) %>%
-            ggplot(aes(predicted_ct, cluster, size=ifelse(f==0,NA,f))) +
-            geom_point(aes(fill=f, col=f>0.05), pch=21) +
+            ggplot(aes(predicted_ct, cluster)) +
+            geom_point(aes(fill=f, col=f>0.05, size=ifelse(f==0,NA,f)), pch=21, show.legend=FALSE) +
             scale_fill_gradient(low = "gray90", high = "blue4", limits=c(0, max_jaccard)) +
             scale_color_manual(values=c(gray(1,0), "black")) +
             scale_size_area(max_size=5, limits=c(0,max_jaccard)) +
-            theme_bw() +
+            theme_bw(base_size = my_txt_size) +
             theme(axis.text.x = element_text(angle=90, hjust = 1, vjust = 0.5)) +
             labs(x=NULL,y=NULL) +
             ggtitle(my_subclass)
@@ -178,14 +179,14 @@ plot_predictions = function(barseq, dataset) {
             complete(cluster, roi) %>%
             mutate(cluster = factor(cluster, cell_type_order())) %>%
             mutate(cluster = fct_rev(cluster)) %>%
-            ggplot(aes(x=roi, y=cluster, size=f_cells)) +
-            geom_point(aes(fill=log_OR, col=fdr<0.05), pch=21) +
-            scale_fill_gradient2(limits=c(-3,3)) +
-            scale_color_manual(values=c(gray(1,0), "black")) +
-            scale_size_area(max_size = 10, limits = c(0,1)) +
-            theme_bw() +
-            theme(axis.text.x = element_text(angle=45,hjust=1), legend.position="top") +
-            labs(x=NULL,y=NULL)
+            ggplot(aes(x=roi, y=cluster)) +
+            geom_point(aes(size=f_cells, fill = log_OR, col=fdr<0.05), pch=21, show.legend=FALSE) +
+            theme_bw(base_size = my_txt_size) +
+            theme(axis.text.x = element_blank()) +
+            scale_size_area(max_size = 5) +
+            scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
+            scale_color_manual(values=c(gray(1,0),"black")) +
+            labs(x = NULL, y = NULL)
         p3 = ref_metadata %>%
             filter(subclass %in% subclass_mapping()[[my_subclass]]) %>%
             mutate(cluster = as.factor(cluster)) %>%
@@ -195,20 +196,19 @@ plot_predictions = function(barseq, dataset) {
             mutate(log_OR = pmin(pmax(log_OR, -3), 3)) %>%
             mutate(n = pmin(n,max_cells)) %>%
             complete(cluster, roi) %>%
-            ggplot(aes(x=roi, y=cluster, size=f_cells)) +
-            geom_point(aes(fill=log_OR, col=fdr<0.05),show.legend=FALSE, pch=21) +
-            scale_fill_gradient2(limits=c(-3,3)) +
-            scale_color_manual(values=c(gray(1,0), "black")) +
-            scale_size_area(max_size = 10, limits = c(0,1)) +
-            theme_bw() +
-            theme(axis.text.x = element_text(angle=45,hjust=1), legend.position="top") +
-            labs(x=NULL,y=NULL)
-        gridExtra::grid.arrange(p1+guides(col="none",fill="none",size="none"),
-                                p2+guides(col="none",fill="none",size="none"),
-                                p3, nrow=2, layout_matrix = rbind(c(1,2),c(1,3)))
-    }
-    gridExtra::grid.arrange(p1, p2)
-    dev.off()
+            ggplot(aes(x=roi, y=cluster)) +
+            geom_point(aes(size=f_cells, fill = log_OR, col=fdr<0.05), pch=21, show.legend=FALSE) +
+            theme_bw(base_size = my_txt_size) +
+            theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+            scale_size_area(max_size = 5) +
+            scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
+            scale_color_manual(values=c(gray(1,0),"black")) +
+            labs(x = NULL, y = NULL)
+        p = p1 | (p2/p3)
+        return(p)
+    })
+    p = wrap_plots(all_plots, ncol=4)
+    ggsave("figs/knn_mapping/yao_mapping.pdf", p, height = 3*20/3, width=4*20/3)
     
     # focus on ET types
     my_subclass = "PT"
@@ -260,16 +260,71 @@ plot_predictions = function(barseq, dataset) {
         ungroup() %>%
         mutate(type = factor(type, rev(ct_order))) %>%
         ggplot(aes(x=roi,y=type)) +
-        geom_point(aes(size=log_OR, fill = log_OR, col=fdr<0.05), pch=21) +
+        geom_point(aes(size=pmin(-log10(fdr),3), fill = log_OR, col=fdr<0.05), pch=21) +
         theme_classic() +
         theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-        scale_radius(breaks = c(-3,0,3), range=c(0,8)) +
+        scale_radius(range = c(0,6)) +
 #        scale_fill_manual(values=c("darkorange2","gray80")) +
         scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
         scale_color_manual(values=c(gray(1,0),"black")) +
         labs(x = "Brain area", y = NULL)
     p1
     ggsave("figs/knn_mapping/yao_mapping_et_types_v2.pdf")
+    p1 = to_plot %>%
+#        mutate(log_OR = pmin(pmax(log_OR, -3), 3)) %>%
+        filter(roi %in% my_roi) %>%
+        mutate(roi = factor(roi, my_roi)) %>%
+        group_by(all_types) %>%
+        complete(roi, type, fill = list(n=0,fdr=1,log_OR=0)) %>%
+        ungroup() %>%
+        mutate(type = factor(type, rev(ct_order))) %>%
+        ggplot(aes(x=roi,y=type)) +
+        geom_point(aes(size=jaccard, fill = log_OR, col=fdr<0.05), pch=21) +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+        scale_size(trans="log10", range = c(0,6)) +
+#        scale_fill_manual(values=c("darkorange2","gray80")) +
+        scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
+        scale_color_manual(values=c(gray(1,0),"black")) +
+        labs(x = "Brain area", y = NULL)
+    p1
+    ggsave("figs/knn_mapping/yao_mapping_et_types_v3.pdf")
+    p1 = to_plot %>%
+#        mutate(log_OR = pmin(pmax(log_OR, -3), 3)) %>%
+        filter(roi %in% my_roi) %>%
+        mutate(roi = factor(roi, my_roi)) %>%
+        group_by(all_types) %>%
+        complete(roi, type, fill = list(n=0,fdr=1,log_OR=0)) %>%
+        ungroup() %>%
+        mutate(type = factor(type, rev(ct_order))) %>%
+        ggplot(aes(x=roi,y=type)) +
+        geom_point(aes(size=jaccard, fill = log_OR, col=fdr<0.05), pch=21) +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+        scale_size(range = c(0,8)) +
+        scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
+        scale_color_manual(values=c(gray(1,0),"black")) +
+        labs(x = "Brain area", y = NULL)
+    p1
+    ggsave("figs/knn_mapping/yao_mapping_et_types_v4.pdf")
+    p1 = to_plot %>%
+#        mutate(log_OR = pmin(pmax(log_OR, -3), 3)) %>%
+        filter(roi %in% my_roi) %>%
+        mutate(roi = factor(roi, my_roi)) %>%
+        group_by(all_types) %>%
+        complete(roi, type, fill = list(n=0,fdr=1,log_OR=0)) %>%
+        ungroup() %>%
+        mutate(type = factor(type, rev(ct_order))) %>%
+        ggplot(aes(x=roi,y=type)) +
+        geom_point(aes(size=f_cells, fill = log_OR, col=fdr<0.05), pch=21) +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+        scale_size_area(max_size = 8) +
+        scale_fill_gradient2(low = "darkblue", mid = "gray90", high = "darkorange2") +
+        scale_color_manual(values=c(gray(1,0),"black")) +
+        labs(x = "Brain area", y = NULL)
+    p1
+    ggsave("figs/knn_mapping/yao_mapping_et_types_v5.pdf")
 }
 
 normalize_cols <- function(M, ranked = TRUE) {
@@ -358,12 +413,14 @@ compute_roi_enrichment = function(roi_data) {
     # CT_-i | Rj-n |N-Ci-Rj|
     #  -> OR = n*(N-Ci-Rj) / [(Ci-n)*(Rj-n)]
     #  -> white drawn = n, total drawn = Ci, #white= Rj, #black = N-Rj 
+    #  -> Jaccard Index = n / (Ci+Rj-n)
     result = roi_data %>%
         mutate(Rj = roi_total[roi], Ci = cluster_total[cluster]) %>%
         # phyper() computes the proportion of scenarios that are *strictly* worse,
         # the -0.5 correction makes sure that the equally worse scenario is included
         mutate(log_pval = phyper(n-0.5, Rj, N-Rj, Ci, lower.tail=FALSE, log.p = TRUE),
-               log_OR = log(n) + log(N-Ci-Rj) - log(Ci-n) - log(Rj-n)) %>%
+               log_OR = log(n) + log(N-Ci-Rj) - log(Ci-n) - log(Rj-n),
+               jaccard = n / (Ci+Rj-n)) %>%
         select(-Rj, -Ci)
     return(result)
 }
